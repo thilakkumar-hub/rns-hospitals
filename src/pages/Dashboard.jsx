@@ -17,49 +17,63 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+    
+    async function fetchDashboardData() {
+      try {
+        const fetchPromise = Promise.all([
+          supabase.from('patients').select('*', { count: 'exact' }),
+          supabase.from('beds').select('status'),
+          supabase.from('staff').select('status'),
+          supabase.from('announcements').select('*').order('created_at', { ascending: false }).limit(3),
+        ]);
+
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Dashboard fetch timed out')), 5000)
+        );
+
+        const [patientsRes, bedsRes, staffRes, annRes] = await Promise.race([fetchPromise, timeoutPromise]);
+
+        if (isMounted) {
+          const totalPatients = patientsRes.count || 0;
+          const admittedPatients = patientsRes.data?.filter(p => p.status === 'admitted' || p.status === 'critical').length || 0;
+          const availableBeds = bedsRes.data?.filter(b => b.status === 'available').length || 0;
+          const totalBeds = bedsRes.data?.length || 0;
+          const onDutyStaff = staffRes.data?.filter(s => s.status === 'available').length || 0;
+          const totalStaff = staffRes.data?.length || 0;
+
+          setStats({
+            totalPatients,
+            admittedPatients,
+            availableBeds,
+            totalBeds,
+            onDutyStaff,
+            totalStaff,
+            criticalPatients: patientsRes.data?.filter(p => p.status === 'critical').length || 0,
+          });
+
+          // Recent patients
+          const { data: recent } = await supabase
+            .from('patients')
+            .select('*, staff:assigned_doctor_id(full_name)')
+            .order('created_at', { ascending: false })
+            .limit(5);
+          setRecentPatients(recent || []);
+
+          setAnnouncements(annRes.data || []);
+        }
+      } catch (err) {
+        console.error('Dashboard fetch error:', err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+
     fetchDashboardData();
+    return () => { isMounted = false; };
   }, []);
 
-  const fetchDashboardData = async () => {
-    try {
-      const [patientsRes, bedsRes, staffRes, annRes] = await Promise.all([
-        supabase.from('patients').select('*', { count: 'exact' }),
-        supabase.from('beds').select('status'),
-        supabase.from('staff').select('status'),
-        supabase.from('announcements').select('*').order('created_at', { ascending: false }).limit(3),
-      ]);
 
-      const totalPatients = patientsRes.count || 0;
-      const admittedPatients = patientsRes.data?.filter(p => p.status === 'admitted' || p.status === 'critical').length || 0;
-      const availableBeds = bedsRes.data?.filter(b => b.status === 'available').length || 0;
-      const totalBeds = bedsRes.data?.length || 0;
-      const onDutyStaff = staffRes.data?.filter(s => s.status === 'available').length || 0;
-      const totalStaff = staffRes.data?.length || 0;
-
-      setStats({
-        totalPatients,
-        admittedPatients,
-        availableBeds,
-        totalBeds,
-        onDutyStaff,
-        totalStaff,
-        criticalPatients: patientsRes.data?.filter(p => p.status === 'critical').length || 0,
-      });
-
-      // Recent patients
-      const { data: recent } = await supabase
-        .from('patients')
-        .select('*, staff:assigned_doctor_id(full_name)')
-        .order('created_at', { ascending: false })
-        .limit(5);
-      setRecentPatients(recent || []);
-
-      setAnnouncements(annRes.data || []);
-    } catch (err) {
-      console.error('Dashboard fetch error:', err);
-    }
-    setLoading(false);
-  };
 
   if (loading) return <><TopNav title="Dashboard" onMenuClick={onMenuClick} /><LoadingSpinner /></>;
 

@@ -11,62 +11,75 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   const fetchStaffProfile = async (userId) => {
-    const { data, error } = await supabase
-      .from('staff')
-      .select('*')
-      .eq('id', userId)
-      .single();
-    if (!error && data) {
-      setStaffProfile(data);
+    try {
+      const fetchPromise = supabase
+        .from('staff')
+        .select('*')
+        .eq('id', userId)
+        .single();
+        
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Profile fetch timed out')), 3000)
+      );
+
+      const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
+      
+      if (!error && data) {
+        setStaffProfile(data);
+      } else {
+        console.error('Profile fetch failed:', error);
+      }
+    } catch (err) {
+      console.error('fetchStaffProfile timeout/error:', err);
     }
   };
 
   useEffect(() => {
-    // Emergency timeout to prevent infinite loading
+    let isMounted = true;
+    
+    // Strict emergency timeout
     const timeoutId = setTimeout(() => {
-      if (loading) {
-        console.warn('Auth check timed out after 5 seconds. Forcing load completion.');
+      if (isMounted) {
+        console.warn('Auth check timed out. Forcing load completion.');
         setLoading(false);
       }
-    }, 5000);
+    }, 3000);
 
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (error) {
-        console.error('Error getting session:', error);
+    const initAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        
+        if (isMounted) setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          await fetchStaffProfile(session.user.id);
+        }
+      } catch (err) {
+        console.error('Auth initialization failed:', err);
+      } finally {
+        if (isMounted) setLoading(false);
+        clearTimeout(timeoutId);
       }
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchStaffProfile(session.user.id).finally(() => {
-          setLoading(false);
-        });
-      } else {
-        setLoading(false);
-      }
-    }).catch(err => {
-      console.error('Unhandled exception in getSession:', err);
-      setLoading(false);
-    });
+    };
 
-    // Listen for auth changes
+    initAuth();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
-        try {
-          setUser(session?.user ?? null);
-          if (session?.user) {
-            await fetchStaffProfile(session.user.id);
-          } else {
-            setStaffProfile(null);
-          }
-        } catch (err) {
-          console.error('Error in onAuthStateChange:', err);
-        } finally {
-          setLoading(false);
+        if (!isMounted) return;
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          await fetchStaffProfile(session.user.id);
+        } else {
+          setStaffProfile(null);
         }
+        setLoading(false);
       }
     );
 
     return () => {
+      isMounted = false;
       clearTimeout(timeoutId);
       subscription.unsubscribe();
     };

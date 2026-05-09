@@ -26,12 +26,24 @@ export default function CodeGenerator() {
   useEffect(() => { fetchCodes(); }, []);
 
   const fetchCodes = async () => {
-    const { data } = await supabase
-      .from('registration_codes')
-      .select('*, creator:created_by(full_name)')
-      .order('created_at', { ascending: false });
-    setCodes(data || []);
-    setLoading(false);
+    try {
+      const fetchPromise = supabase
+        .from('registration_codes')
+        .select('*, creator:created_by(full_name)')
+        .order('created_at', { ascending: false });
+
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Fetch codes timed out')), 5000)
+      );
+
+      const { data } = await Promise.race([fetchPromise, timeoutPromise]);
+      setCodes(data || []);
+    } catch (err) {
+      console.error('Error fetching codes:', err);
+      setCodes([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleGenerate = async () => {

@@ -71,21 +71,21 @@ export default function Sidebar({ isOpen, onClose }) {
       </nav>
 
       <div className="sidebar-footer">
-        <div className="user-card">
+        <NavLink to="/profile" className="user-card" style={{ textDecoration: 'none', color: 'inherit', display: 'flex', position: 'relative' }} onClick={onClose}>
           <div className="user-avatar">{initials}</div>
           <div className="user-info">
             <div className="user-name">{staffProfile?.full_name || 'Loading...'}</div>
             <div className="user-role">{staffProfile?.role || ''}</div>
           </div>
-          <button
-            className="btn btn-sm"
-            onClick={signOut}
-            title="Sign out"
-            style={{ color: 'rgba(255,255,255,0.6)', padding: '4px' }}
-          >
-            <FiLogOut />
-          </button>
-        </div>
+        </NavLink>
+        <button
+          className="btn btn-sm btn-logout"
+          onClick={signOut}
+          title="Sign out"
+          style={{ position: 'absolute', right: '16px', bottom: '26px', color: 'rgba(255,255,255,0.6)', padding: '4px', zIndex: 10 }}
+        >
+          <FiLogOut />
+        </button>
       </div>
     </div>
   );

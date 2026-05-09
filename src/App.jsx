@@ -12,6 +12,7 @@ import Patients from './pages/Patients';
 import Announcements from './pages/Announcements';
 import EmergencyContacts from './pages/EmergencyContacts';
 import CodeGenerator from './pages/admin/CodeGenerator';
+import Profile from './pages/Profile';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -50,6 +51,7 @@ function AppRoutes() {
         <Route path="patients" element={<Patients />} />
         <Route path="announcements" element={<Announcements />} />
         <Route path="emergency" element={<EmergencyContacts />} />
+        <Route path="profile" element={<Profile />} />
 
         {/* Admin only */}
         <Route path="admin/codes" element={<AdminRoute><CodeGenerator /></AdminRoute>} />
